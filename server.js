@@ -71,29 +71,34 @@ WantedBy=multi-user.target
 
   const serviceFilePath = `/etc/systemd/system/tenant-${tenantName}.service`;
 
-  // Escribir el archivo de servicio systemd
-  fs.writeFileSync(serviceFilePath, serviceContent);
-
-  // Recargar systemd y habilitar el servicio
-  exec('sudo systemctl daemon-reload', (error, stdout, stderr) => {
-    if (error) {
-      console.error(`Error al recargar systemd: ${error.message}`);
-      return res.status(500).json({ message: 'Error al recargar systemd.' });
+  // Intentamos escribir el archivo de servicio
+  fs.writeFile(serviceFilePath, serviceContent.trim(), 'utf8', (err) => {
+    if (err) {
+      console.error(`Error al escribir el archivo de servicio: ${err.message}`);
+      return res.status(500).json({ message: `Error al escribir el archivo de servicio para el tenant ${tenantName}.` });
     }
 
-    exec(`sudo systemctl enable tenant-${tenantName}.service && sudo systemctl start tenant-${tenantName}.service`, (error, stdout, stderr) => {
+    // Recargar systemd y habilitar el servicio
+    exec('sudo systemctl daemon-reload', (error, stdout, stderr) => {
       if (error) {
-        console.error(`Error al habilitar el servicio: ${error.message}`);
-        return res.status(500).json({ message: 'Error al habilitar el servicio.' });
+        console.error(`Error al recargar systemd: ${error.message}`);
+        return res.status(500).json({ message: 'Error al recargar systemd.' });
       }
 
-      console.log(stdout);
-      console.log(stderr);
+      exec(`sudo systemctl enable tenant-${tenantName}.service && sudo systemctl start tenant-${tenantName}.service`, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Error al habilitar el servicio: ${error.message}`);
+          return res.status(500).json({ message: 'Error al habilitar el servicio.' });
+        }
 
-      // Retornar el contenido del archivo de servicio para validación
-      return res.json({
-        message: `Servicio para el tenant ${tenantName} creado y en ejecución.`,
-        serviceContent: serviceContent.trim() // Se devuelve el contenido del archivo de servicio para validación
+        console.log(stdout);
+        console.log(stderr);
+
+        // Retornar el contenido del archivo de servicio para validación
+        return res.json({
+          message: `Servicio para el tenant ${tenantName} creado y en ejecución.`,
+          serviceContent: serviceContent.trim() // Se devuelve el contenido del archivo de servicio para validación
+        });
       });
     });
   });
