@@ -96,7 +96,101 @@ WantedBy=multi-user.target
   });
 });
 
-// Otras rutas para detener, reiniciar, eliminar servicios, etc...
+// Ruta para iniciar un servicio
+app.post('/startService', (req, res) => {
+  const tenantName = req.body.tenantName;
+  const serviceName = `tenant-${tenantName}.service`;
+
+  exec(`sudo systemctl start ${serviceName}`, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Error al iniciar el servicio: ${error.message}`);
+      return res.status(500).json({ message: `Error al iniciar el servicio ${tenantName}.` });
+    }
+
+    return res.json({ message: `Servicio ${tenantName} iniciado correctamente.` });
+  });
+});
+
+// Ruta para detener un servicio
+app.post('/stopService', (req, res) => {
+  const tenantName = req.body.tenantName;
+  const serviceName = `tenant-${tenantName}.service`;
+
+  exec(`sudo systemctl stop ${serviceName}`, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Error al detener el servicio: ${error.message}`);
+      return res.status(500).json({ message: `Error al detener el servicio ${tenantName}.` });
+    }
+
+    return res.json({ message: `Servicio ${tenantName} detenido correctamente.` });
+  });
+});
+
+// Ruta para reiniciar un servicio
+app.post('/restartService', (req, res) => {
+  const tenantName = req.body.tenantName;
+  const serviceName = `tenant-${tenantName}.service`;
+
+  exec(`sudo systemctl restart ${serviceName}`, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Error al reiniciar el servicio: ${error.message}`);
+      return res.status(500).json({ message: `Error al reiniciar el servicio ${tenantName}.` });
+    }
+
+    return res.json({ message: `Servicio ${tenantName} reiniciado correctamente.` });
+  });
+});
+
+// Ruta para obtener el estado de un servicio
+app.get('/serviceStatus', (req, res) => {
+  const tenantName = req.query.tenantName;
+  const serviceName = `tenant-${tenantName}.service`;
+
+  exec(`sudo systemctl status ${serviceName}`, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Error al obtener el estado del servicio: ${error.message}`);
+      return res.status(500).json({ message: `Error al obtener el estado del servicio ${tenantName}.` });
+    }
+
+    return res.json({ message: `Estado del servicio ${tenantName}: ${stdout}` });
+  });
+});
+
+// Ruta para eliminar un servicio
+app.post('/deleteService', (req, res) => {
+  const tenantName = req.body.tenantName;
+  const serviceName = `tenant-${tenantName}.service`;
+  const serviceFilePath = `/etc/systemd/system/${serviceName}`;
+
+  // Detener el servicio si está en ejecución
+  exec(`sudo systemctl stop ${serviceName}`, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Error al detener el servicio: ${error.message}`);
+      return res.status(500).json({ message: `Error al detener el servicio ${tenantName}.` });
+    }
+
+    // Deshabilitar el servicio
+    exec(`sudo systemctl disable ${serviceName}`, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error al deshabilitar el servicio: ${error.message}`);
+        return res.status(500).json({ message: `Error al deshabilitar el servicio ${tenantName}.` });
+      }
+
+      // Eliminar el archivo de servicio
+      fs.unlinkSync(serviceFilePath);
+
+      // Recargar systemd
+      exec('sudo systemctl daemon-reload', (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Error al recargar systemd: ${error.message}`);
+          return res.status(500).json({ message: 'Error al recargar systemd.' });
+        }
+
+        return res.json({ message: `Servicio ${tenantName} eliminado correctamente.` });
+      });
+    });
+  });
+});
 
 // Iniciar el servidor
 const PORT = process.env.PORT || 3000;
