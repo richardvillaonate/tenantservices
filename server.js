@@ -56,15 +56,14 @@ app.post('/createService', (req, res) => {
 
   const serviceContent = `
 [Unit]
-Description=Tenant ${tenantName} API
+Description=Ejecutar pnpm run dev en ${tenantPath}
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/node ${tenantPath}/server.js
+ExecStart=/usr/bin/pnpm run dev
 WorkingDirectory=${tenantPath}
 Restart=always
 User=root
-Environment=NODE_ENV=production
 
 [Install]
 WantedBy=multi-user.target
@@ -91,7 +90,11 @@ WantedBy=multi-user.target
       console.log(stdout);
       console.log(stderr);
 
-      return res.json({ message: `Servicio para el tenant ${tenantName} creado y en ejecución.` });
+      // Retornar el contenido del archivo de servicio para validación
+      return res.json({
+        message: `Servicio para el tenant ${tenantName} creado y en ejecución.`,
+        serviceContent: serviceContent.trim() // Se devuelve el contenido del archivo de servicio para validación
+      });
     });
   });
 });
