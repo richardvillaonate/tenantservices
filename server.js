@@ -104,9 +104,14 @@ WantedBy=multi-user.target
   });
 });
 
-// Ruta para iniciar un servicio
+// Ruta para iniciar un servicio (por tenant)
 app.post('/startService', (req, res) => {
   const tenantName = req.body.tenantName;
+
+  if (!tenantName) {
+    return res.status(400).json({ message: 'El parámetro tenantName es obligatorio.' });
+  }
+
   const serviceName = `tenant-${tenantName}.service`;
 
   exec(`sudo systemctl start ${serviceName}`, (error, stdout, stderr) => {
@@ -116,6 +121,24 @@ app.post('/startService', (req, res) => {
     }
 
     return res.json({ message: `Servicio ${tenantName} iniciado correctamente.` });
+  });
+});
+
+// Ruta para iniciar un servicio por nombre
+app.post('/startServiceByName', (req, res) => {
+  const serviceName = req.body.serviceName;
+
+  if (!serviceName) {
+    return res.status(400).json({ message: 'El parámetro serviceName es obligatorio.' });
+  }
+
+  exec(`sudo systemctl start ${serviceName}`, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Error al iniciar el servicio: ${error.message}`);
+      return res.status(500).json({ message: `Error al iniciar el servicio ${serviceName}.` });
+    }
+
+    return res.json({ message: `Servicio ${serviceName} iniciado correctamente.` });
   });
 });
 
@@ -152,6 +175,11 @@ app.post('/restartService', (req, res) => {
 // Ruta para obtener el estado de un servicio
 app.get('/serviceStatus', (req, res) => {
   const tenantName = req.query.tenantName;
+
+  if (!tenantName) {
+    return res.status(400).json({ message: 'El parámetro tenantName es obligatorio.' });
+  }
+
   const serviceName = `tenant-${tenantName}.service`;
 
   exec(`sudo systemctl status ${serviceName}`, (error, stdout, stderr) => {
