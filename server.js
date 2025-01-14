@@ -1,175 +1,105 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const exec = require('child_process').exec;
 const app = express();
-const port = 3000;
+const bodyParser = require('body-parser');
 
-app.use(express.json());
+app.use(bodyParser.json());
 
-// Ruta para crear un tenant y sus archivos
+// Ruta para crear un tenant
 app.post('/createTenant', (req, res) => {
-    const { tenantName } = req.body;
+  const tenantName = req.body.tenantName;
+  const tenantPath = path.join('/root/whatsapp-tenant-api', tenantName);
 
-    if (!tenantName) {
-        return res.status(400).send('Tenant name is required');
+  // Verificar si el tenant ya existe
+  if (fs.existsSync(tenantPath)) {
+    return res.status(400).json({ message: `El tenant ${tenantName} ya existe.` });
+  }
+
+  // Crear el directorio para el tenant
+  fs.mkdirSync(tenantPath, { recursive: true });
+
+  // Clonar el repositorio en el directorio del tenant
+  exec(`git clone https://github.com/richardvillaonate/nodejs-api-whatsapp.git ${tenantPath}`, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Error al clonar el repositorio: ${error.message}`);
+      return res.status(500).json({ message: `Error al clonar el repositorio para el tenant ${tenantName}.` });
     }
 
-    const tenantDir = path.join(__dirname, tenantName);
+    console.log(stdout);
+    console.log(stderr);
 
-    // Verificar si ya existe la carpeta del tenant
-    if (fs.existsSync(tenantDir)) {
-        return res.status(400).send('Tenant already exists');
-    }
+    // Instalar las dependencias usando pnpm
+    exec(`cd ${tenantPath} && pnpm install`, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error al instalar las dependencias: ${error.message}`);
+        return res.status(500).json({ message: `Error al instalar las dependencias para el tenant ${tenantName}.` });
+      }
 
-    // Crear carpeta para el tenant
-    fs.mkdirSync(tenantDir);
+      console.log(stdout);
+      console.log(stderr);
 
-    // Clonar el repositorio dentro del directorio del tenant
-    exec(`git clone https://github.com/richardvillaonate/nodejs-api-whatsapp.git ${tenantDir}`, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Error al clonar el repositorio: ${stderr}`);
-            return res.status(500).send('Error al clonar el repositorio');
-        }
-
-        // Instalar dependencias dentro de la carpeta del tenant
-        exec(`pnpm install`, { cwd: tenantDir }, (err, out, stdErr) => {
-            if (err) {
-                console.error(`Error al instalar dependencias: ${stdErr}`);
-                return res.status(500).send('Error al instalar dependencias');
-            }
-            return res.status(201).send(`Tenant ${tenantName} creado y dependencias instaladas`);
-        });
+      return res.json({ message: `Tenant ${tenantName} creado y dependencias instaladas.` });
     });
+  });
 });
 
-// Ruta para crear un archivo de servicio de systemd para un tenant
+// Ruta para crear el servicio de systemd para el tenant
 app.post('/createService', (req, res) => {
-    const { tenantName } = req.body;
+  const tenantName = req.body.tenantName;
+  const tenantPath = path.join('/root/whatsapp-tenant-api', tenantName);
 
-    if (!tenantName) {
-        return res.status(400).send('Tenant name is required');
-    }
+  if (!fs.existsSync(tenantPath)) {
+    return res.status(400).json({ message: `El tenant ${tenantName} no existe.` });
+  }
 
-    const serviceFilePath = `/etc/systemd/system/${tenantName}.service`;
-
-    // Verificar si ya existe el archivo de servicio
-    if (fs.existsSync(serviceFilePath)) {
-        return res.status(400).send('Service already exists');
-    }
-
-    // Crear el archivo de servicio para systemd
-    const serviceContent = `
+  const serviceContent = `
 [Unit]
-Description=Servicio para tenant ${tenantName}
+Description=Tenant ${tenantName} API
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/pnpm run dev
-WorkingDirectory=/root/whatsapp-tenant-api/${tenantName}
+ExecStart=/usr/bin/node ${tenantPath}/server.js
+WorkingDirectory=${tenantPath}
 Restart=always
 User=root
+Environment=NODE_ENV=production
 
 [Install]
 WantedBy=multi-user.target
-`;
+  `;
 
-    fs.writeFileSync(serviceFilePath, serviceContent);
+  const serviceFilePath = `/etc/systemd/system/tenant-${tenantName}.service`;
 
-    // Recargar systemd para que reconozca el nuevo servicio
-    exec('sudo systemctl daemon-reload', (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Error al recargar systemd: ${stderr}`);
-            return res.status(500).send('Error al crear el servicio');
-        }
+  // Escribir el archivo de servicio systemd
+  fs.writeFileSync(serviceFilePath, serviceContent);
 
-        // Habilitar el servicio para que se inicie al arrancar
-        exec(`sudo systemctl enable ${tenantName}.service`, (err, out, stdErr) => {
-            if (err) {
-                console.error(`Error al habilitar el servicio: ${stdErr}`);
-                return res.status(500).send('Error al habilitar el servicio');
-            }
-
-            // Iniciar el servicio
-            exec(`sudo systemctl start ${tenantName}.service`, (e, o, se) => {
-                if (e) {
-                    console.error(`Error al iniciar el servicio: ${se}`);
-                    return res.status(500).send('Error al iniciar el servicio');
-                }
-                return res.status(201).send(`Servicio para el tenant ${tenantName} creado y en ejecución`);
-            });
-        });
-    });
-});
-
-// Ruta para detener un servicio de un tenant
-app.post('/stopService', (req, res) => {
-    const { tenantName } = req.body;
-
-    if (!tenantName) {
-        return res.status(400).send('Tenant name is required');
+  // Recargar systemd y habilitar el servicio
+  exec('sudo systemctl daemon-reload', (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Error al recargar systemd: ${error.message}`);
+      return res.status(500).json({ message: 'Error al recargar systemd.' });
     }
 
-    exec(`sudo systemctl stop ${tenantName}.service`, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Error al detener el servicio: ${stderr}`);
-            return res.status(500).send('Error al detener el servicio');
-        }
-        return res.status(200).send(`Servicio ${tenantName} detenido correctamente`);
+    exec(`sudo systemctl enable tenant-${tenantName}.service && sudo systemctl start tenant-${tenantName}.service`, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error al habilitar el servicio: ${error.message}`);
+        return res.status(500).json({ message: 'Error al habilitar el servicio.' });
+      }
+
+      console.log(stdout);
+      console.log(stderr);
+
+      return res.json({ message: `Servicio para el tenant ${tenantName} creado y en ejecución.` });
     });
+  });
 });
 
-// Ruta para reiniciar un servicio de un tenant
-app.post('/restartService', (req, res) => {
-    const { tenantName } = req.body;
+// Otras rutas para detener, reiniciar, eliminar servicios, etc...
 
-    if (!tenantName) {
-        return res.status(400).send('Tenant name is required');
-    }
-
-    exec(`sudo systemctl restart ${tenantName}.service`, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Error al reiniciar el servicio: ${stderr}`);
-            return res.status(500).send('Error al reiniciar el servicio');
-        }
-        return res.status(200).send(`Servicio ${tenantName} reiniciado correctamente`);
-    });
-});
-
-// Ruta para eliminar un servicio de un tenant
-app.post('/removeService', (req, res) => {
-    const { tenantName } = req.body;
-
-    if (!tenantName) {
-        return res.status(400).send('Tenant name is required');
-    }
-
-    // Detener el servicio antes de eliminarlo
-    exec(`sudo systemctl stop ${tenantName}.service && sudo systemctl disable ${tenantName}.service`, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Error al detener y deshabilitar el servicio: ${stderr}`);
-            return res.status(500).send('Error al detener y deshabilitar el servicio');
-        }
-
-        // Eliminar el archivo del servicio
-        const serviceFilePath = `/etc/systemd/system/${tenantName}.service`;
-        fs.unlink(serviceFilePath, (err) => {
-            if (err) {
-                console.error(`Error al eliminar el archivo del servicio: ${err}`);
-                return res.status(500).send('Error al eliminar el archivo del servicio');
-            }
-            // Recargar systemd después de eliminar el servicio
-            exec('sudo systemctl daemon-reload', (e, o, se) => {
-                if (e) {
-                    console.error(`Error al recargar systemd: ${se}`);
-                    return res.status(500).send('Error al recargar systemd');
-                }
-                return res.status(200).send(`Servicio ${tenantName} eliminado correctamente`);
-            });
-        });
-    });
-});
-
-app.listen(port, () => {
-    console.log(`API escuchando en http://localhost:${port}`);
+// Iniciar el servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`API corriendo en http://localhost:${PORT}`);
 });
