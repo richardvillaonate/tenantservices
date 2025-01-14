@@ -9,7 +9,9 @@ app.use(bodyParser.json());
 
 // Ruta para crear un tenant
 app.post('/createTenant', (req, res) => {
+  console.log(req.body);
   const tenantName = req.body.tenantName;
+
   const tenantPath = path.join('/root/whatsapp-tenant-api', tenantName);
 
   // Verificar si el tenant ya existe
@@ -47,6 +49,7 @@ app.post('/createTenant', (req, res) => {
 
 // Ruta para crear el servicio de systemd para el tenant
 app.post('/createService', (req, res) => {
+  console.log(req.body);
   const tenantName = req.body.tenantName;
   const tenantPath = path.join('/root/whatsapp-tenant-api', tenantName);
 
@@ -106,6 +109,7 @@ WantedBy=multi-user.target
 
 // Ruta para iniciar un servicio (por tenant)
 app.post('/startService', (req, res) => {
+  console.log(req.body);
   const tenantName = req.body.tenantName;
 
   if (!tenantName) {
@@ -126,6 +130,8 @@ app.post('/startService', (req, res) => {
 
 // Ruta para iniciar un servicio por nombre
 app.post('/startServiceByName', (req, res) => {
+
+  console.log(req.body);
   const serviceName = req.body.serviceName || req.body.tenantName && `tenant-${req.body.tenantName}.service`;
 
   if (!serviceName) {
@@ -144,6 +150,7 @@ app.post('/startServiceByName', (req, res) => {
 
 // Ruta para obtener el estado de un servicio
 app.get('/serviceStatus', (req, res) => {
+  console.log(req.body);
   const tenantName = req.query.tenantName;
 
   if (!tenantName) {
@@ -164,6 +171,7 @@ app.get('/serviceStatus', (req, res) => {
 
 // Ruta para detener un servicio
 app.post('/stopService', (req, res) => {
+  console.log(req.body);
   const tenantName = req.body.tenantName;
   const serviceName = `tenant-${tenantName}.service`;
 
@@ -179,6 +187,7 @@ app.post('/stopService', (req, res) => {
 
 // Ruta para reiniciar un servicio
 app.post('/restartService', (req, res) => {
+  console.log(req.body);
   const tenantName = req.body.tenantName;
   const serviceName = `tenant-${tenantName}.service`;
 
@@ -194,6 +203,7 @@ app.post('/restartService', (req, res) => {
 
 // Ruta para eliminar un servicio
 app.post('/deleteService', (req, res) => {
+  console.log(req.body);
   const tenantName = req.body.tenantName;
   const serviceName = `tenant-${tenantName}.service`;
   const serviceFilePath = `/etc/systemd/system/${serviceName}`;
