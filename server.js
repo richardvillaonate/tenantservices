@@ -9,9 +9,7 @@ app.use(bodyParser.json());
 
 // Ruta para crear un tenant
 app.post('/createTenant', (req, res) => {
-  // console.log(req.body);
   const tenantName = req.body.tenantName;
-
   const tenantPath = path.join('/root/whatsapp-tenant-api', tenantName);
 
   // Verificar si el tenant ya existe
@@ -29,9 +27,6 @@ app.post('/createTenant', (req, res) => {
       return res.status(500).json({ message: `Error al clonar el repositorio para el tenant ${tenantName}.` });
     }
 
-    console.log(stdout);
-    console.log(stderr);
-
     // Instalar las dependencias usando pnpm
     exec(`cd ${tenantPath} && pnpm install`, (error, stdout, stderr) => {
       if (error) {
@@ -42,10 +37,28 @@ app.post('/createTenant', (req, res) => {
       console.log(stdout);
       console.log(stderr);
 
-      return res.json({ message: `Tenant ${tenantName} creado y dependencias instaladas.` });
+      // Ejecutar el comando pnpm run dev
+      const devProcess = exec(`cd ${tenantPath} && pnpm run dev`);
+
+      // Mostrar salida del proceso
+      devProcess.stdout.on('data', (data) => {
+        console.log(`DEV STDOUT: ${data}`);
+      });
+
+      devProcess.stderr.on('data', (data) => {
+        console.error(`DEV STDERR: ${data}`);
+      });
+
+      // Cancelar el proceso después de 30 segundos
+      setTimeout(() => {
+        devProcess.kill();
+        console.log(`Proceso dev para ${tenantName} detenido después de 30 segundos.`);
+        return res.json({ message: `Tenant ${tenantName} creado, dependencias instaladas y dev ejecutado temporalmente.` });
+      }, 30000);
     });
   });
 });
+
 
 // Ruta para crear el servicio de systemd para el tenant
 app.post('/createService', (req, res) => {
