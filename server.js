@@ -4,8 +4,11 @@ const path = require('path');
 const exec = require('child_process').exec;
 const app = express();
 const bodyParser = require('body-parser');
+const cors = require('cors');
 
+// Configurar middleware
 app.use(bodyParser.json());
+app.use(cors()); // Habilitar CORS para todas las solicitudes
 
 // Ruta para crear un tenant
 app.post('/createTenant', (req, res) => {
@@ -210,7 +213,7 @@ app.post('/restartService', (req, res) => {
       return res.status(500).json({ message: `Error al reiniciar el servicio ${tenantName}.` });
     }
 
-    return res.json({ message: `Servicio ${tenantName} reiniciado correctamente.` });
+    return res.json({ respuesta:true ,message: `Servicio ${tenantName} reiniciado correctamente.` });
   });
 });
 
